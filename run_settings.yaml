@@ -1,0 +1,20 @@
+# Which AI runs the agents. Command-line flags (--provider, --model, --effort) override these.
+provider: claude          # claude, codex or gemini
+
+claude:
+  model: opus             # opus, sonnet, fable, or a full model name
+  effort: medium          # low, medium, high, xhigh, max
+
+codex:
+  # Models: gpt-5.6-sol, gpt-6-astra, gpt-5.6-terra, gpt-5.6-luna, gpt-5.5, or default (the tool's own)
+  model: gpt-5.6-sol
+  # Efforts: low, medium, high, xhigh (all models); max (all but gpt-5.5);
+  #          ultra (gpt-5.6-sol, gpt-6-astra, gpt-5.6-terra); or default
+  effort: medium
+
+gemini:
+  # Models: auto, pro, flash, flash-lite (aliases), or a full name:
+  #         gemini-3.1-pro-preview, gemini-3-pro-preview, gemini-3.5-flash,
+  #         gemini-3-flash-preview, gemini-2.5-pro, gemini-2.5-flash; or default
+  model: gemini-3.5-flash
+  # Gemini has no effort setting

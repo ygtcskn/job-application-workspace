@@ -1,0 +1,17 @@
+# Local Python environment, caches and IDE settings
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Generated per run: build files, agent logs, reviews and final PDFs
+temp/
+output/
+
+# LaTeX build files if a template is compiled in place
+*.aux
+*.log
+*.out

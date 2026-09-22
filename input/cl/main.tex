@@ -1,0 +1,42 @@
+
+\input{rules}
+
+\begin{document}
+
+%---------- HEADER ----------%
+
+\input{src/heading.tex}
+
+%---------- COMPANY ADDRESS ----------%
+\input{src/company.tex}
+
+\vspace{18pt}
+
+%---------- DATE ----------%
+
+\begin{flushright}
+Nürnberg, \letterdate
+\end{flushright}
+
+\vspace{10pt}
+
+%---------- LETTER ----------%
+
+\input{src/towhom.tex}
+
+I particularly enjoy working with quantitative methods, developing models, and evaluating how well they perform on real-world data. This is why I am applying for the \position{} position, \inputfill{src/part1}
+
+For my Master’s thesis at the Chair of Statistics and Econometrics, entitled “Tracking Inflation in the G20 at High Frequency and in Real Time: A Machine Learning Approach”, I developed an end-to-end forecasting framework using 20 years of weekly Google Trends data for 15 G20 economies. I automated the collection of more than 27,000 time series in Python, processed and transformed the high-frequency data, and implemented a mixed-frequency forecasting framework combining monthly inflation with weekly indicators. I developed and compared LSTM neural networks, XGBoost, autoregressive models, and a Random Walk benchmark, with the LSTM achieving the strongest overall forecasting performance. This work strengthened my knowledge of statistical modelling, machine learning, time series analysis, and model evaluation, while teaching me how to approach complex quantitative problems independently and systematically.
+
+Alongside my studies, I worked as a Working Student at the Institute for Employment Research (IAB), where I prepared, validated, and analysed large-scale survey and administrative datasets using R and Stata. I worked with linked longitudinal data covering more than 44,000 respondents, conducted statistical analyses, and prepared tables and visualisations to communicate results to researchers. During my previous internship at Ziraat Bank, I also gained practical exposure to retail banking, analysing customer and portfolio data using SQL and preparing Excel-based analyses for branch management.
+
+\inputfill{src/part2.tex}
+
+\inputfill{src/part3.tex}
+
+\vspace{12pt}
+
+Yours sincerely, \\
+Yigit Coskun
+
+\end{document}

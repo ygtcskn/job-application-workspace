@@ -1,0 +1,54 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[empty]{fullpage}
+\usepackage{fontawesome5}
+\usepackage[hidelinks]{hyperref}
+\usepackage[T1]{fontenc}
+\usepackage[default]{lato}
+\usepackage[british]{babel}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\input{glyphtounicode}
+
+% Ensure that generated pdf is machine readable/ATS parsable
+\pdfgentounicode=1
+
+% British date format, e.g. 18 September 2026
+\newcommand{\letterdate}{\number\day\space\ifcase\month\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi\space\number\year}
+
+% Fill-in files (src/part*.tex) mark editable text with {...} or [...]. Neither prints:
+% braces are LaTeX groups, and square brackets are ignored characters inside these files.
+\newcommand{\inputfill}[1]{\begingroup\catcode`\[=9 \catcode`\]=9 \input{#1}\endgroup}
+
+% Position name read from src/position.tex, usable in text and PDF metadata
+\usepackage{catchfile}
+\CatchFileDef{\position}{src/position.tex}{\endlinechar=-1}
+
+\hypersetup{
+    pdftitle={Yigit Coskun - Cover Letter},
+    pdfauthor={Yigit Coskun},
+    pdfsubject={Application for \position},
+    pdfkeywords={
+        Yigit Coskun,
+        \position,
+        Data Analysis,
+        Statistics,
+        Machine Learning,
+        Econometrics,
+        Python,
+        SQL,
+        Banking
+    },
+    pdfcreator={LaTeX},
+    pdfproducer={pdfLaTeX}
+}
+
+% Margins similar to CV
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1.0in}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{8pt}

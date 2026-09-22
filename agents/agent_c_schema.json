@@ -1,0 +1,128 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["job_analysis", "requirements", "cv_assessment", "cover_letter_assessment", "combined_assessment", "ats_keywords", "overall_assessment", "interview_recommendation", "strongest_matches", "important_gaps", "cv_recommendations", "cover_letter_recommendations", "interview_questions", "final_summary"],
+  "properties": {
+    "job_analysis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "item"],
+        "properties": {
+          "category": {"type": "string", "enum": ["Core responsibility", "Mandatory qualification", "Preferred qualification", "Technical skill or tool", "Domain knowledge", "Soft skill", "Terminology and keywords", "Seniority expectation"]},
+          "item": {"type": "string"}
+        }
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requirement", "importance", "evidence_level", "evidence", "source", "gap_type", "comment"],
+        "properties": {
+          "requirement": {"type": "string"},
+          "importance": {"type": "string", "enum": ["Mandatory", "Core responsibility", "Preferred"]},
+          "evidence_level": {"type": "string", "enum": ["STRONG", "MODERATE", "WEAK", "MISSING"]},
+          "evidence": {"type": "string", "description": "Quote or close paraphrase from the CV or cover letter; empty when MISSING"},
+          "source": {"type": "string", "enum": ["CV", "Cover letter", "Both", "None"]},
+          "gap_type": {"type": "string", "enum": ["None", "Experience gap", "Presentation gap"]},
+          "comment": {"type": "string"}
+        }
+      }
+    },
+    "cv_assessment": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterion", "rating", "justification"],
+        "properties": {
+          "criterion": {"type": "string", "enum": ["Relevance", "Evidence strength", "Technical fit", "Domain fit", "Measurable impact", "ATS terminology", "Clarity", "Unnecessary content"]},
+          "rating": {"type": "integer", "enum": [1, 2, 3, 4, 5]},
+          "justification": {"type": "string"}
+        }
+      }
+    },
+    "cover_letter_assessment": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterion", "rating", "justification"],
+        "properties": {
+          "criterion": {"type": "string", "enum": ["Role-specific motivation", "Background-position connection", "Evidence supporting claims", "Company/job specificity", "Repetition of the CV", "Conciseness and natural tone"]},
+          "rating": {"type": "integer", "enum": [1, 2, 3, 4, 5]},
+          "justification": {"type": "string"}
+        }
+      }
+    },
+    "combined_assessment": {"type": "string", "description": "How the CV and cover letter work together"},
+    "ats_keywords": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["keyword", "status", "note"],
+        "properties": {
+          "keyword": {"type": "string"},
+          "status": {"type": "string", "enum": ["Present", "Supported, phrased differently", "Missing, legitimately addable", "Missing, unsupported"]},
+          "note": {"type": "string", "description": "Where it appears, the CV wording that supports it, or why it cannot be added"}
+        }
+      }
+    },
+    "overall_assessment": {"type": "string"},
+    "interview_recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "reason"],
+      "properties": {
+        "decision": {"type": "string", "enum": ["Strong yes", "Yes", "Maybe", "No"]},
+        "reason": {"type": "string"}
+      }
+    },
+    "strongest_matches": {"type": "array", "items": {"type": "string"}},
+    "important_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gap", "gap_type", "impact"],
+        "properties": {
+          "gap": {"type": "string"},
+          "gap_type": {"type": "string", "enum": ["Experience gap", "Presentation gap"]},
+          "impact": {"type": "string"}
+        }
+      }
+    },
+    "cv_recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["recommendation", "reason"],
+        "properties": {"recommendation": {"type": "string"}, "reason": {"type": "string"}}
+      }
+    },
+    "cover_letter_recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["recommendation", "reason"],
+        "properties": {"recommendation": {"type": "string"}, "reason": {"type": "string"}}
+      }
+    },
+    "interview_questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "reason"],
+        "properties": {"question": {"type": "string"}, "reason": {"type": "string", "description": "The strength or gap the question probes"}}
+      }
+    },
+    "final_summary": {"type": "string"}
+  }
+}
