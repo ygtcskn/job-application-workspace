@@ -1,0 +1,46 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["application_rules", "requirements", "keywords", "must_not_add", "edit_plan"],
+  "properties": {
+    "application_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_documents", "location_requirement", "other_restrictions"],
+      "properties": {
+        "required_documents": {"type": "array", "items": {"type": "string"}},
+        "location_requirement": {"type": "string"},
+        "other_restrictions": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requirement", "importance", "type", "evidence", "actual_match", "cv_match"],
+        "properties": {
+          "requirement": {"type": "string"},
+          "importance": {"type": "string", "enum": ["Must-have", "Important", "Preferred", "Contextual"]},
+          "type": {"type": "string", "enum": ["Technical Skill", "Method / Model", "Programming Language", "Tool", "Domain Knowledge", "Work Experience", "Education", "Language", "Soft Skill", "Responsibility", "Business Context"]},
+          "evidence": {"type": "string"},
+          "actual_match": {"type": "string", "enum": ["STRONG", "MODERATE", "WEAK", "MISSING"]},
+          "cv_match": {"type": "string", "enum": ["STRONG", "MODERATE", "WEAK", "MISSING"]}
+        }
+      }
+    },
+    "keywords": {"type": "array", "items": {"type": "string"}},
+    "must_not_add": {"type": "array", "items": {"type": "string"}},
+    "edit_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reorder", "rewrite", "emphasize", "remove"],
+      "properties": {
+        "reorder": {"type": "array", "items": {"type": "string"}},
+        "rewrite": {"type": "array", "items": {"type": "string"}},
+        "emphasize": {"type": "array", "items": {"type": "string"}},
+        "remove": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

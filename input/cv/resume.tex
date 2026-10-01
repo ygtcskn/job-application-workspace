@@ -5,20 +5,20 @@
 % License : MIT
 %------------------------
 
-\documentclass[a4paper,11pt]{article}
+\documentclass[a4paper,12pt]{article}
 
-\usepackage{fontawesome5}
 \usepackage{latexsym}
-\usepackage[empty]{fullpage}
+\usepackage[a4paper, left=0.75in, right=0.75in, top=0.5in, bottom=0.5in]{geometry}
 \usepackage{titlesec}
 \usepackage{marvosym}
-\usepackage[usenames,dvipsnames]{color}
+\usepackage[dvipsnames]{xcolor}
 \usepackage{verbatim}
 \usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
 \usepackage{fancyhdr}
-\usepackage[english]{babel}
+\input{src/babel} % babel with the CV language
 \usepackage{tabularx}
+\usepackage[protrusion=false, expansion=false]{microtype} % only for letterspaced section titles
 \input{glyphtounicode}
 
 \hypersetup{
@@ -41,9 +41,14 @@
     pdfproducer={pdfLaTeX}
 }
 
-% Custom font
+% Custom fonts: sans-serif body, serif name and section titles
 \usepackage[T1]{fontenc}
-\usepackage[default]{lato}
+\usepackage[default]{sourcesanspro}
+\usepackage{sourceserifpro}
+
+% Accent for the job title, section titles, section rules and bullets; grey for dates and places
+\definecolor{accent}{HTML}{3730A3}
+\definecolor{meta}{HTML}{4B5563}
 
 \pagestyle{fancy}
 \fancyhf{} % clear all header and footer fields
@@ -51,23 +56,20 @@
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
 
-% Adjust margins
-\addtolength{\oddsidemargin}{-0.5in}
-\addtolength{\evensidemargin}{-0.5in}
-\addtolength{\textwidth}{1in}
-\addtolength{\topmargin}{-.5in}
-\addtolength{\textheight}{1.0in}
-
 \urlstyle{same}
+\linespread{1.04} % looser lines for readability
 
 \raggedbottom
 \raggedright
 \setlength{\tabcolsep}{0in}
 
-% Sections formatting
+% Sections formatting: capitals in the accent colour above a rule of the same colour.
+% Letterspacing above about 40 makes PDF text extractors split titles into single letters.
+\newcommand{\sectiontitle}[1]{\textls[30]{\MakeUppercase{#1}}}
 \titleformat{\section}{
-  \vspace{-4pt}\scshape\raggedright\large
-}{}{0em}{}[\color{black}\titlerule\vspace{-5pt}]
+  \raggedright\rmfamily\bfseries\small\color{accent}
+}{}{0em}{\sectiontitle}[{\color{accent}\titlerule[0.6pt]\vspace{-4pt}}]
+\titlespacing*{\section}{0pt}{9pt}{7pt}
 
 % Ensure that generate pdf is machine readable/ATS parsable
 \pdfgentounicode=1
@@ -83,17 +85,28 @@
 %----------HEADING----------%
 \input{src/heading}
 
-%-----------EDUCATION-----------%
-\input{src/education.tex}
+%-----------SUMMARY-----------%
+\input{src/summary}
 
 %-----------EXPERIENCE-----------%
 \input{src/experience}
 
-%-----------PROJECTS-----------%
-\input{src/projects}
+%-----------EDUCATION-----------%
+\input{src/education.tex}
 
 %-----------SKILLS-----------%
 \input{src/skills.tex}
+
+\newpage
+
+%-----------PROJECTS-----------%
+\input{src/projects}
+
+%-----------CERTIFICATES-----------%
+\input{src/certificates}
+
+%-----------LANGUAGES-----------%
+\input{src/languages}
 
 %-------------------------------------------%
 \end{document}

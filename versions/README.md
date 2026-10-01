@@ -67,3 +67,22 @@ config/, docs/, input/, tests/, run.ps1, notes), including uncommitted edits.
 - job-application-pipeline-v2.0.0.zip — SHA-256
   C253C72EAEBF76F803F36385D1B3D31868825370A9E27EB0B74013AEF503ECDC
 - Verified all 60 archived files against source SHA-256 hashes.
+
+## Version 2.1.0 snapshot — 2026-10-01
+
+Preserved the full job_py working tree (src/, agents/, input/, tests/,
+run_settings.yaml, notes and the root template PDFs), including uncommitted
+edits. Adds German CV and cover-letter templates chosen from the job ad's
+language, and the reviewed CV edition in both languages: shorter IAB bullets,
+a separate IAB report project, a three-bullet thesis project, and no Concepts
+or Certificates lines. Agent B now only rewords bullets in experience.tex and
+projects.tex. `.venv`, `.idea`, caches, `output/`, `temp/`, Git metadata and
+earlier archives are excluded.
+
+The root `cv_template.pdf` and `cv_template_en.pdf` were built on 2026-09-29,
+before the CV review, and still show the previous CV text.
+
+- job-application-pipeline-v2.1.0.zip — SHA-256
+  F54118F8F234D919F2158B91E3182CBDF05A0BBA32116BC4994C58584A9ED9B0
+- Verified all 58 archived files against source SHA-256 hashes.
+- 38 unit tests pass; both CV templates compile to one page.

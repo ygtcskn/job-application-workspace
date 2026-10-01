@@ -1,0 +1,49 @@
+
+\input{rules}
+
+\begin{document}
+
+%---------- HEADER ----------%
+
+\input{src/heading.tex}
+
+%---------- COMPANY ADDRESS ----------%
+\input{src/company.tex}
+
+\vspace{18pt}
+
+%---------- DATE ----------%
+
+\begin{flushright}
+Nürnberg, \letterdate
+\end{flushright}
+
+\vspace{10pt}
+
+%---------- SUBJECT ----------%
+
+{\color{accent}\textbf{Bewerbung um die Stelle „\position{}“}}
+
+\vspace{4pt}
+
+%---------- LETTER ----------%
+
+% German letters continue in lower case after the salutation's comma.
+\input{src/towhom.tex}
+
+mich mit statistischen Methoden auseinanderzusetzen, Modelle zu entwickeln und am Ende zu sehen, ob sie wirklich halten, was sie versprechen, bereitet mir große Freude. Deshalb bewerbe ich mich auf die Stelle \inputfill{src/part1}
+
+In meiner Masterarbeit am Lehrstuhl für Statistik und Ökonometrie mit dem Titel „Tracking Inflation in the G20 at High Frequency and in Real Time: A Machine Learning Approach“ habe ich untersucht, wie sich die Inflation mithilfe einer Vielzahl von Prädiktoren in Echtzeit schätzen lässt (Nowcasting). Dazu habe ich mit Machine-Learning-Ansätzen gearbeitet und ein durchgängiges Prognose-Framework auf Basis von 20 Jahren wöchentlicher Google-Trends-Daten entwickelt. Dabei habe ich die Datenerhebung automatisiert, die hochfrequenten Daten aufbereitet und transformiert sowie einen Mixed-Frequency-Prognoseansatz umgesetzt – vollständig in Python. Ich habe Machine-Learning- und Zeitreihenmodelle wie neuronale LSTM-Netze, XGBoost, autoregressive Modelle und einen Random-Walk-Benchmark entwickelt und verglichen. Die Arbeit hat mir gezeigt, wie wichtig Daten und quantitative Modelle sind, um Entwicklungen einzuschätzen und Entscheidungen zu unterstützen. Zugleich konnte ich meine Kenntnisse in Data Science, statistischer Modellierung und Programmierung vertiefen und lernen, komplexe analytische Aufgaben selbstständig und strukturiert anzugehen.
+
+Viele dieser Kenntnisse konnte ich bereits als Werkstudent in den Bereichen Statistical Methods und Labour Studies am Institut für Arbeitsmarkt- und Berufsforschung (IAB) praktisch anwenden. Dort habe ich mit statistischen Methoden und großen Datensätzen gearbeitet: Ich habe umfangreiche Befragungs- und administrative Daten mit R und Stata aufbereitet, validiert und analysiert, darunter zusammengeführte Längsschnittdaten zu mehr als 44.000 Befragten, und die Ergebnisse in Tabellen und Visualisierungen für Forschende dargestellt. Zudem habe ich kausale Analysen zur Mobilitätspolitik für Geflüchtete mit Propensity Score Matching, Difference-in-Differences und Regression-Kink-Designs unterstützt. Während meines Praktikums bei der Ziraat Bank habe ich praktische Einblicke in das Privatkundengeschäft gewonnen, Kunden- und Portfoliodaten mit SQL analysiert und Excel-basierte Auswertungen für die Filialleitung erstellt. Durch mein Studium und meine bisherigen Tätigkeiten bringe ich eine gute Grundlage in Datenanalyse, Modellentwicklung und Reporting mit.
+
+\inputfill{src/part2.tex}
+
+\inputfill{src/part3.tex}
+
+\vspace{12pt}
+
+Mit freundlichen Grüßen \\
+Yigit Coskun
+
+\end{document}

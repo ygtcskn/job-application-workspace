@@ -1,0 +1,60 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[empty]{fullpage}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage[T1]{fontenc}
+% Same fonts and colours as the CV: sans-serif body, serif name, accent for the rule under the heading
+\usepackage[default]{sourcesanspro}
+\usepackage{sourceserifpro}
+\definecolor{accent}{HTML}{3730A3}
+\definecolor{meta}{HTML}{4B5563}
+% Separator between the contact details in the heading
+\newcommand{\sep}{\unskip\hspace{6pt}\textperiodcentered\hspace{6pt}\ignorespaces}
+\usepackage[ngerman]{babel}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\input{glyphtounicode}
+
+% Ensure that generated pdf is machine readable/ATS parsable
+\pdfgentounicode=1
+
+% German date format, e.g. 18. September 2026
+\newcommand{\letterdate}{\number\day.\space\ifcase\month\or Januar\or Februar\or März\or April\or Mai\or Juni\or Juli\or August\or September\or Oktober\or November\or Dezember\fi\space\number\year}
+
+% Fill-in files (src/part*.tex) mark editable text with {...} or [...]. Neither prints:
+% braces are LaTeX groups, and square brackets are ignored characters inside these files.
+\newcommand{\inputfill}[1]{\begingroup\catcode`\[=9 \catcode`\]=9 \input{#1}\endgroup}
+
+% Position name read from src/position.tex, usable in text and PDF metadata
+\usepackage{catchfile}
+\CatchFileDef{\position}{src/position.tex}{\endlinechar=-1}
+
+\hypersetup{
+    pdftitle={Yigit Coskun - Anschreiben},
+    pdfauthor={Yigit Coskun},
+    pdfsubject={Bewerbung: \position},
+    pdfkeywords={
+        Yigit Coskun,
+        \position,
+        Datenanalyse,
+        Statistik,
+        Machine Learning,
+        Ökonometrie,
+        Python,
+        SQL,
+        Banking
+    },
+    pdfcreator={LaTeX},
+    pdfproducer={pdfLaTeX}
+}
+
+% Margins similar to CV
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1.0in}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{8pt}

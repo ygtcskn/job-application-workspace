@@ -1,5 +1,11 @@
 # Provider and pipeline audit — 21 September 2026
 
+**Historical audit.** The provider comparison below describes the implementation
+and logs inspected on 21 September. The shared structured workflow now supplies
+extracted text to all three providers, validates edits locally, and supports
+`--skip-review`. See [README.md](README.md) for current behaviour. The old timing
+figures below are not benchmarks of the updated workflow.
+
 Scope: active source files, agent prompts, templates, validation, process management,
 tests, batch history, retained stage logs and generated artifacts. Archived ZIP
 inventories and their README were inspected as historical context, not treated as

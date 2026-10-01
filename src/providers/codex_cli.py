@@ -5,6 +5,9 @@ from pathlib import Path
 from src.process import ProcessFailure, run_process
 from src.providers.base import ProviderFailure
 
+# --output-schema gives the model the schema, so the prompt does not repeat it.
+NATIVE_SCHEMA = True
+
 
 def command(settings, schema_path: Path | None, output_path: Path, cwd: Path):
     args = [settings.executable, "exec", "--ignore-user-config", "--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never", "--json", "--output-last-message", str(output_path), "-C", str(cwd)]

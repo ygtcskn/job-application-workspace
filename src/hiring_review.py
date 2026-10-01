@@ -3,9 +3,9 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-# Mandatory requirements and core responsibilities count three times as much as preferred ones.
-WEIGHTS = {"Mandatory": 3, "Core responsibility": 3, "Preferred": 1}
-SCORES = {"STRONG": 1.0, "MODERATE": 0.6, "WEAK": 0.3, "MISSING": 0.0}
+# The tailoring guideline's weights and scores, as in Agent J's analysis (src/analysis.py).
+WEIGHTS = {"Mandatory": 3, "Core responsibility": 2, "Preferred": 1}
+SCORES = {"STRONG": 1.0, "MODERATE": 0.7, "WEAK": 0.3, "MISSING": 0.0}
 FILLS = {"STRONG": "C6EFCE", "MODERATE": "FFEB9C", "WEAK": "F8CBAD", "MISSING": "FFC7CE"}
 HEADER_FILL = PatternFill("solid", fgColor="D9E1F2")
 WRAP = Alignment(wrap_text=True, vertical="top")
@@ -47,8 +47,8 @@ def write_review(review: dict, path: Path):
         ["Overall assessment", review["overall_assessment"]],
         ["CV and cover letter together", review["combined_assessment"]],
         ["Final summary", review["final_summary"]],
-        ["Coverage method", "Weights: Mandatory 3, Core responsibility 3, Preferred 1. "
-                            "Scores: STRONG 1, MODERATE 0.6, WEAK 0.3, MISSING 0."],
+        ["Coverage method", "Weights: Mandatory 3, Core responsibility 2, Preferred 1. "
+                            "Scores: STRONG 1, MODERATE 0.7, WEAK 0.3, MISSING 0."],
     ], [32, 110])
     for cell in summary["A"]:
         cell.font = Font(bold=True)

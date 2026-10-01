@@ -6,11 +6,9 @@ response is validated locally against the same contract, so a malformed reply
 becomes an ordinary format-repair attempt rather than a silent acceptance.
 """
 import json
-import re
 from src.process import run_process, ProcessFailure
 from src.providers.base import ProviderFailure, launcher
 
-FENCE = re.compile(r"^```[A-Za-z0-9_+-]*[ \t]*\r?\n(.*?)\r?\n?```[ \t]*$", re.S)
 # Installed help: "Defaults to interactive mode. Use -p/--prompt for non-interactive (headless)
 # mode", and -p is "Appended to input on stdin (if any)". The assembled prompt therefore travels
 # on stdin and -p carries only this closing instruction, keeping personal content out of argv.
@@ -29,16 +27,6 @@ def command(settings, trailer=TRAILER, policy_path=None):
     if settings.model:
         args += ["--model", settings.model]
     return args
-
-
-def extract_json(text: str) -> str:
-    """Return the best JSON candidate; malformed text falls through to format repair."""
-    stripped = text.strip()
-    fenced = FENCE.match(stripped)
-    if fenced:
-        stripped = fenced[1].strip()
-    start, end = stripped.find("{"), stripped.rfind("}")
-    return stripped[start:end + 1] if 0 <= start < end else stripped
 
 
 def error_envelope(*streams):
@@ -88,19 +76,18 @@ def invoke(settings, prompt, schema_path, stage_dir, cwd):
         raise ProviderFailure(f'Gemini process failed: {exc}') from exc
     (stage_dir / "stdout.txt").write_text(stdout, encoding="utf-8")
     (stage_dir / "stderr.txt").write_text(stderr, encoding="utf-8")
-    # Agent runs return free text; only schema runs are narrowed to a JSON candidate.
-    extract = extract_json if schema_path else str.strip
+    # The shared workflow parses and validates replies identically for all providers.
     try:
         envelope = json.loads(stdout)
     except ValueError:
         # A non-JSON envelope is still handed on; local validation rejects anything unusable.
-        return extract(stdout)
+        return stdout.strip()
     if not isinstance(envelope, dict):
-        return extract(stdout)
+        return stdout.strip()
     if envelope.get("error"):
         raise ProviderFailure(f"Gemini rejected request: {error_envelope(stdout)}")
     settings.resolved_model = resolved_model(envelope.get("stats")) or settings.resolved_model
     response = envelope.get("response")
     if response is None:
         raise ValueError("Gemini returned no response field")
-    return extract(response if isinstance(response, str) else json.dumps(response, ensure_ascii=False))
+    return response.strip() if isinstance(response, str) else json.dumps(response, ensure_ascii=False)

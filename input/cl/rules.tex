@@ -1,10 +1,16 @@
 \documentclass[a4paper,11pt]{article}
 
 \usepackage[empty]{fullpage}
-\usepackage{fontawesome5}
+\usepackage{xcolor}
 \usepackage[hidelinks]{hyperref}
 \usepackage[T1]{fontenc}
-\usepackage[default]{lato}
+% Same fonts and colours as the CV: sans-serif body, serif name, accent for the rule under the heading
+\usepackage[default]{sourcesanspro}
+\usepackage{sourceserifpro}
+\definecolor{accent}{HTML}{3730A3}
+\definecolor{meta}{HTML}{4B5563}
+% Separator between the contact details in the heading
+\newcommand{\sep}{\unskip\hspace{6pt}\textperiodcentered\hspace{6pt}\ignorespaces}
 \usepackage[british]{babel}
 \usepackage{enumitem}
 \usepackage{tabularx}
