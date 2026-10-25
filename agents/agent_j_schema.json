@@ -1,7 +1,7 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["application_rules", "requirements", "keywords", "must_not_add", "edit_plan"],
+  "required": ["application_rules", "requirements", "keywords", "tools", "must_not_add", "edit_plan"],
   "properties": {
     "application_rules": {
       "type": "object",
@@ -29,7 +29,24 @@
         }
       }
     },
-    "keywords": {"type": "array", "items": {"type": "string"}},
+    "keywords": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["term", "use_in"],
+        "properties": {"term": {"type": "string"}, "use_in": {"type": "string"}}
+      }
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "line"],
+        "properties": {"name": {"type": "string"}, "line": {"type": "string", "enum": ["tools"]}}
+      }
+    },
     "must_not_add": {"type": "array", "items": {"type": "string"}},
     "edit_plan": {
       "type": "object",

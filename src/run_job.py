@@ -30,7 +30,7 @@ from src.progress import Progress, clock
 from src.validation import validate_identity, validate_review
 from src.agent_workflow import CL_FILES, CV_FILES, CV_READ_ONLY, execute_agent, pdf_text
 from src.analysis import match_scores, report as tailoring_report
-from src.cv_model import before_after, new_words
+from src.cv_model import SKILLS, add_tools, before_after, new_words, validate_programming_skills
 from src.language import LANGUAGES, detect_language
 from src.providers import claude_cli, codex_cli, gemini_cli
 from src.providers.base import ProviderFailure, Settings, find_executable
@@ -135,11 +135,18 @@ def run_job(job: int, settings: Settings, *, review: bool = False, language: str
     note = LANGUAGE_NOTE.format(LANGUAGES[language])
     cv_files = lambda: {path: (build / path).read_text(encoding="utf-8") for path in CV_FILES + CV_READ_ONLY}
     cv_before = cv_files()
+    validate_programming_skills(cv_before, cv_before)
     output = output_dir(job)
 
     with progress.step("Agent J: analysing the job ad against the CV"):
         analysis = json.loads(run_agent(settings, build, ad, "agent_j", "agent_j_analyst.md", [note],
                                         AGENTS_DIR / "agent_j_schema.json"))
+
+    # Ad-only software joins Tools; programming entries always stay as verified in the template.
+    skills, tools = add_tools((build / SKILLS).read_text(encoding="utf-8"), analysis["tools"], ad_text)
+    (build / SKILLS).write_text(skills, encoding="utf-8")
+    if tools:
+        print(f"    Tools added from the ad: {', '.join(tools)}")
 
     changes = ""
     for name, instructions, files, label in EDITORS:
@@ -156,6 +163,7 @@ def run_job(job: int, settings: Settings, *, review: bool = False, language: str
                 # The CV prints the same role under the name; no AI call is spent on it.
                 shutil.copyfile(build / "cl/src/position.tex", build / "cv/src/job_title.tex")
 
+    validate_programming_skills(cv_before, cv_files(), analysis)
     with progress.step("Building CV PDF"):
         cv_pdf = build_pdf(build / "cv", "resume.tex")
     if page_count(cv_pdf) > CV_PAGES:
@@ -164,6 +172,7 @@ def run_job(job: int, settings: Settings, *, review: bool = False, language: str
         with progress.step("Agent B: shortening CV to two pages"):
             changes += "\n\nAfter shortening to two pages:\n" + run_agent(
                 settings, build, ad, "agent_b_retry", "agent_b_optimizer.md", ["CV files: `cv/src/`", SHORTEN_CV, note])
+        validate_programming_skills(cv_before, cv_files(), analysis)
         with progress.step("Rebuilding CV PDF"):
             cv_pdf = build_pdf(build / "cv", "resume.tex")
         if page_count(cv_pdf) > CV_PAGES:

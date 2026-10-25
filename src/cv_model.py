@@ -7,10 +7,16 @@ import difflib
 import re
 from pathlib import Path
 
+from src.analysis import CPP, contains, mentions
 from src.validation import escape_latex_text
 
 # One Skills line: \textbf{Label}{: item, item (with, commas), item}
 SKILL_LINE = re.compile(r'(\\textbf\{([^{}]*)\}\{:\s*)([^{}]*)(\})')
+CONCEPT_LABELS = ('Concepts', 'Kompetenzen')
+PROGRAMMING_LABELS = ('Programming', 'Programmierung')
+REQUIRED_CONCEPTS = ('LSTM', 'XGBoost')
+# Include the row's line break when comparing Skills with or without a Concepts row.
+CONCEPT_ROW = re.compile(r'[ \t]*\\textbf\{(Concepts|Kompetenzen)\}\{:\s*([^{}]*)\}[ \t]*(?:\\\\[ \t]*)?(?:\r?\n)?')
 # \resumeSubheading{title}{dates}{organisation}{place}
 ENTRY = re.compile(r'\\resumeSubheading\s*\{([^{}]*)\}\s*\{([^{}]*)\}\s*\{([^{}]*)\}\s*\{([^{}]*)\}')
 # Agent text is plain; these characters would break or change the LaTeX it is placed in.
@@ -53,6 +59,60 @@ def skill_items(text):
     return [item.strip() for item in re.split(r',\s*(?![^()]*\))', text) if item.strip()]
 
 
+# Tools from the ad that may join one skills line, so the line stays readable and on its page.
+MAX_ADDED_TOOLS = 4
+
+
+def add_tools(skills_tex, tools, ad_text):
+    """Append the ad's software tools to Tools; never extend Programming/Programmierung.
+
+    tools: [{'name', 'line'}], most important first. A tool is added only if the ad names it and
+    the CV does not already list it. Returns (new skills.tex, names added).
+    """
+    named = lambda name: re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', ad_text, re.I)
+    added = []
+
+    def extend(match):
+        if match[2] != 'Tools':
+            return match[0]
+        items = skill_items(match[3])
+        listed = ' '.join(items).casefold()
+        new = [tool['name'].strip() for tool in tools if tool['line'] == 'tools'
+               and tool['name'].strip() and tool['name'].strip().casefold() not in listed
+               and named(tool['name'].strip()) and not NOT_PLAIN.search(tool['name'])
+               and not CPP.search(tool['name'])]
+        new = list(dict.fromkeys(new))[:MAX_ADDED_TOOLS]
+        added.extend(new)
+        items += [escape_latex_text(name) for name in new]
+        return match[1] + ', '.join(items) + match[4]
+
+    return SKILL_LINE.sub(extend, skills_tex), added
+
+
+def validate_programming_skills(original, edited, analysis=None):
+    """Keep the template's programming entries; reject C++ and unsupported language claims.
+
+    Run before saving agent edits and again before compiling, against the original template.
+    The analysis's language requirements are checked even if must_not_add omitted them.
+    """
+    def programming(files):
+        return {label: sorted(skill_items(items)) for _, label, items, _ in
+                SKILL_LINE.findall(files.get(SKILLS, '')) if label in PROGRAMMING_LABELS}
+
+    if programming(original) != programming(edited):
+        raise ValueError('Programming skills may only be reordered; keep the verified template entries')
+    text = '\n'.join(detex(value) for value in edited.values())
+    if CPP.search(text):
+        raise ValueError('C++ is prohibited in candidate CV claims; remove it')
+    if analysis is not None:
+        before = '\n'.join(detex(value) for value in original.values())
+        unsupported = [r['requirement'] for r in analysis['requirements']
+                       if r['type'] == 'Programming Language' and not contains(before, r['requirement'])]
+        added = [term for term in unsupported if contains(text, term)]
+        if added:
+            raise ValueError(f'The original CV has no evidence for programming languages {added}; remove them')
+
+
 def detex(text):
     """LaTeX source as the plain text a reader sees, one line per source line."""
     text = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('%'))
@@ -64,6 +124,54 @@ def detex(text):
     text = re.sub(r'[{}]', ' ', text)
     lines = (' '.join(line.split()) for line in text.splitlines())
     return '\n'.join(line for line in lines if line)
+
+
+def insert_concepts_row(skills, label):
+    """Restore a missing Concepts row above the read-only Languages line."""
+    marker = r'\input{src/languages}'
+    anchor = skills.index(marker)
+    indent = re.search(r'[ \t]*$', skills[:anchor])[0]
+    row = rf'\textbf{{{label}}}{{: }} \\' + '\n' + indent
+    return skills.replace(marker, row + marker, 1)
+
+
+def deduplicate_concepts(files, evidence=()):
+    """Remove repeated optional Concepts; always keep LSTM and XGBoost.
+
+    Other skills lines, wording, read-only evidence and language levels are preserved.
+    Match complete terms with the same case/inflection/hyphen handling as ad keywords.
+    """
+    if SKILLS not in files:
+        return dict(files)
+    skills = files[SKILLS]
+    if not CONCEPT_ROW.search(skills) and r'\input{src/languages}' in skills:
+        label = 'Kompetenzen' if any(line[1] == 'Programmierung' for line in SKILL_LINE.findall(skills)) else 'Concepts'
+        skills = insert_concepts_row(skills, label)
+    elsewhere = '\n'.join(detex(CONCEPT_ROW.sub('', text) if path == SKILLS else text)
+                          for path, text in files.items())
+    elsewhere += '\n' + '\n'.join(detex(text) for text in evidence)
+
+    def prune(match):
+        def already_named(item):
+            phrase = detex(item)
+            # Slash-separated aliases such as ETL/Data Pipelines also repeat a named Data Pipelines keyword.
+            aliases = [part.strip() for part in phrase.split('/')]
+            terms = [phrase, *aliases] if len(aliases) > 1 and all(len(part) >= 3 for part in aliases) else [phrase]
+            return any(mentions(elsewhere, term) for term in terms)
+
+        required = {item.casefold(): item for item in REQUIRED_CONCEPTS}
+        remaining = []
+        for item in skill_items(match[2]):
+            canonical = required.get(detex(item).casefold())
+            if canonical:
+                if canonical not in remaining:
+                    remaining.append(canonical)
+            elif not already_named(item):
+                remaining.append(item)
+        remaining.extend(item for item in REQUIRED_CONCEPTS if item not in remaining)
+        return SKILL_LINE.sub(lambda line: line[1] + ', '.join(remaining) + line[4], match[0], count=1)
+
+    return {**files, SKILLS: CONCEPT_ROW.sub(prune, skills)}
 
 
 def cv_entries(path, text):
@@ -129,11 +237,20 @@ def apply_edits(original, reply):
         raise ValueError(f'Unknown bullet or entry ids: {sorted(edits) + sorted(order)}')
     lines = {line['label']: line['items'] for line in reply['skills']}
     if lines:
-        labels = {label for _, label, _, _ in SKILL_LINE.findall(original[SKILLS])}
+        skills = original[SKILLS]
+        labels = {label for _, label, _, _ in SKILL_LINE.findall(skills)}
+        concept_label = 'Kompetenzen' if 'Programmierung' in labels else 'Concepts'
+        if concept_label in lines and concept_label not in labels:
+            # A shortening pass may move a term out of the summary after its Concepts row was removed.
+            if not lines[concept_label]:
+                lines.pop(concept_label)
+            elif r'\input{src/languages}' in skills:
+                skills = insert_concepts_row(skills, concept_label)
+                labels.add(concept_label)
         if set(lines) - labels:
             raise ValueError(f'skills: unknown labels {sorted(set(lines) - labels)}; the CV has {sorted(labels)}')
         files[SKILLS] = SKILL_LINE.sub(lambda m: m[1] + ', '.join(clean(item, f'{m[2]} item') for item in lines[m[2]]) + m[4]
-                                       if m[2] in lines else m[0], original[SKILLS])
+                                       if m[2] in lines else m[0], skills)
     return files
 
 
@@ -158,7 +275,10 @@ def before_after(original, final):
                     for before, after in changed:
                         lines += [f'- Before: {before}', f'  After:  {after}']
         elif path == SKILLS:
-            for (_, label, old, _), (_, _, new, _) in zip(SKILL_LINE.findall(original[path]), SKILL_LINE.findall(final[path])):
+            old_lines = {label: items for _, label, items, _ in SKILL_LINE.findall(original[path])}
+            new_lines = {label: items for _, label, items, _ in SKILL_LINE.findall(final[path])}
+            for label in dict.fromkeys([*old_lines, *new_lines]):
+                old, new = old_lines.get(label, ''), new_lines.get(label, '')
                 if detex(old) != detex(new):
                     lines += [f'\n**Skills, {label}**', f'- Before: {detex(old)}', f'  After:  {detex(new)}']
         elif detex(original[path]) != detex(final[path]):

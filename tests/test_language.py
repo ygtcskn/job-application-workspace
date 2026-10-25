@@ -50,7 +50,7 @@ class GermanTemplateTests(unittest.TestCase):
     def test_unchanged_templates_pass_edit_validation(self):
         # Agents may return a template unchanged, so every template must satisfy the checks.
         paths = [f'{folder}/src/{name}.tex' for folder, names in
-                 (('cl', ('part1', 'part2', 'part3')), ('cv', ('summary_text', 'experience', 'projects', 'skills'))) for name in names]
+                 (('cl', ('part1', 'part3')), ('cv', ('summary_text', 'experience', 'projects', 'skills'))) for name in names]
         for language, locate in (('English', lambda path: INPUT / path), ('German', german)):
             with self.subTest(language=language):
                 files = {path: locate(path).read_text(encoding='utf-8') for path in paths}
@@ -73,24 +73,26 @@ class GermanEditValidationTests(unittest.TestCase):
                 r'Datenvisualisierung, Datenmodellierung, ETL/Datenpipelines, Zeitreihenprognose}')
         before = {'cv/src/skills.tex': line}
         validate_edits(before, {'cv/src/skills.tex': line.replace('Zeitreihenprognose', 'Power BI, Reporting')})
+        # A concept is no longer mandatory when the summary already names it.
+        validate_edits(before, {'cv/src/skills.tex': line.replace('Statistik, ', '')})
         with self.assertRaises(ValueError):
-            validate_edits(before, {'cv/src/skills.tex': line.replace('Statistik', 'Statistics')})
+            validate_edits(before, {'cv/src/skills.tex': line.replace('Zeitreihenprognose', 'Statistik')})
 
     def test_straight_quotes_rejected(self):
         # Under German babel "A prints as Ä and "u as ü.
-        before = {'cl/src/part2.tex': 'An der Position reizt mich {Datenanalyse}.'}
+        before = {'cl/src/part3.tex': 'Beitragen zu {Datenanalyse}.'}
         with self.assertRaisesRegex(ValueError, 'typographic'):
-            validate_edits(before, {'cl/src/part2.tex': 'An der Position reizt mich {"Analytics" und Datenanalyse}.'})
-        validate_edits(before, {'cl/src/part2.tex': 'An der Position reizt mich {„Analytics“ und Datenanalyse}.'})
+            validate_edits(before, {'cl/src/part3.tex': 'Beitragen zu {"Analytics" und Datenanalyse}.'})
+        validate_edits(before, {'cl/src/part3.tex': 'Beitragen zu {„Analytics“ und Datenanalyse}.'})
 
     def test_unescaped_latex_characters_rejected(self):
         # Each of these stops pdflatex, after the agent's repair attempt would have been possible.
-        before = {'cl/src/part2.tex': '% Only edit parts with brackets\nInterest in {analytics}.'}
+        before = {'cl/src/part3.tex': '% Only edit parts with brackets\nContribute to {analytics}.'}
         for fill in ('Data & AI', '50% of reports', 'data_quality', 'team #1', 'costs in $'):
             with self.subTest(fill=fill), self.assertRaisesRegex(ValueError, 'escape'):
-                validate_edits(before, {'cl/src/part2.tex': before['cl/src/part2.tex'].replace('analytics', fill)})
+                validate_edits(before, {'cl/src/part3.tex': before['cl/src/part3.tex'].replace('analytics', fill)})
         escaped = r'Data \& AI, 50\% of reports, data\_quality, team \#1, costs in \$'
-        validate_edits(before, {'cl/src/part2.tex': before['cl/src/part2.tex'].replace('analytics', escaped)})
+        validate_edits(before, {'cl/src/part3.tex': before['cl/src/part3.tex'].replace('analytics', escaped)})
 
 
 if __name__ == '__main__':

@@ -30,9 +30,14 @@ The 8 to 15 requirements that matter most, one skill, tool or responsibility eac
 
 Never assume a skill because a related one appears. A tool the CV does not name is `MISSING`. Familiarity is not experience; coursework is not professional experience.
 
-## `keywords` and `must_not_add`
+Programming languages require explicit CV evidence. A requirement of type `Programming Language` names only the language in `requirement`, in its usual spelling (`Python`, not `experience with Python` or `Python and Pandas`); list one requirement per language and put libraries or context in `evidence`. Never infer C++ or another language from Python, SQL, a related language or the ad. An unsupported programming language has `actual_match` and `cv_match` set to `MISSING`, keyword `use_in` set to `none`, and belongs in `must_not_add`. C++ is explicitly prohibited as a candidate skill and must never be placed on the CV.
 
-- `keywords`: up to 15 of the ad's most important screening terms, in the ad's exact wording, most important first. Include supported and unsupported ones.
+## `keywords`, `tools` and `must_not_add`
+
+- `keywords`: up to 15 of the ad's most important screening terms, most important first, each with the place where the CV can truthfully carry it. Agent B does not see the ad: these terms are how the ad's language reaches the CV, and the pipeline checks that each placed term ends up on it.
+  - `term`: the ad's own wording, one to three words, in its base form (singular, nominative) as it could stand in a skills list. For an English ad use American spelling, as the CV does (`modeling`, not `modelling`). Leave out the job title itself; it is printed under the name.
+  - `use_in`: where the term fits without stating more than the candidate did: the `id` of the bullet whose work it describes, `summary`, or `concepts` (the Concepts skills line). A term the CV already contains still gets its place. `none` when no truthful place exists.
+- `tools`: only software tools the ad names that the CV does not list, in the ad's spelling, most important first, each with `line`: `tools`. Never include programming languages, statistical packages or C++ here, even under the Tools label. Programming/Programmierung keeps only the verified template entries. The pipeline adds eligible software to Tools only; it appears nowhere else.
 - `must_not_add`: every tool, platform, method, certification, language level, industry or kind of experience the ad asks for that the CV does not support. The ad's wording, one term per entry (`Snowflake`, `A/B testing`). List nothing the CV already contains. The pipeline rejects a tailored CV that contains one of these terms.
 
 ## `edit_plan`
@@ -45,3 +50,8 @@ How the CV should change so that `cv_match` rises to `actual_match` and no furth
 - `remove`: wording or skills that compete for attention and matter little for this job. Bullets cannot be deleted; say what to shorten or move down.
 
 Plan nothing that would state more than the CV supports.
+
+Concepts/Kompetenzen always includes LSTM and XGBoost, even when they are named
+elsewhere. Other concepts only fill gaps in wording: do not plan to repeat a term
+there if it is already named elsewhere in the CV or will be named in the summary
+or a bullet.

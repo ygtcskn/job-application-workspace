@@ -9,9 +9,10 @@ import pymupdf
 
 from src.agent_workflow import CL_FILES, CV_FILES, execute_agent, parse_reply, request_structured, validate_edits
 from src.providers.base import ProviderFailure, Settings
-from src.cv_model import apply_edits, before_after, compact_cv, detex, new_words
+from src.cv_model import (add_tools, apply_edits, before_after, compact_cv, deduplicate_concepts, detex,
+                          new_words, validate_programming_skills)
 from src.providers import claude_cli, codex_cli, gemini_cli
-from test_pipeline_validation import valid_review
+from test_pipeline_validation import valid_analysis, valid_review
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,7 +28,7 @@ class WorkflowTests(unittest.TestCase):
                 with pymupdf.open() as doc:
                     doc.new_page().insert_text((72,72), 'Data Analyst\nCompany: Example')
                     doc.save(ad)
-                original = dict(zip(CL_FILES, ['Old Company', 'Dear Hiring Team,', 'Data Analyst', 'In {finance}.', 'Work in {analytics}.', 'Use [data].']))
+                original = dict(zip(CL_FILES, ['Old Company', 'Dear Hiring Team,', 'Data Analyst', 'In {finance}.', 'Use [data].']))
                 for path, value in original.items():
                     p = build/path; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(value)
                 revised = dict(original, **{'cl/src/company.tex': 'Example'})
@@ -89,13 +90,13 @@ class WorkflowTests(unittest.TestCase):
                     self.assertNotIn('resumeItem', prompt.split('INPUT DATA:')[1])
                     self.assertIn('Analysed 20 records in Python.', prompt)
                     return json.dumps({'status': 'complete', 'summary': '', 'bullets': [{'id': 'E1.1', 'text': 'Analysed 20 records in Python & R.'}],
-                                       'order': [], 'skills': [], 'omitted': ['Snowflake'], 'note': 'Data analyst profile.'})
+                                       'order': [], 'skills': [], 'omitted': ['dashboards'], 'note': 'Data analyst profile.'})
                 execute_agent(SimpleNamespace(invoke=invoke), Settings(provider, 'unused', None, None, 10),
                               build, Path('ad.pdf'), 'agent_b', ROOT / 'agents/agent_b_optimizer.md', [])
                 # Python restores the markup and escapes the ampersand.
                 self.assertEqual((build / 'cv/src/experience.tex').read_text(encoding='utf-8'),
                                  r'Heading\resumeItem{Analysed 20 records in Python \& R.}End')
-                self.assertIn('Snowflake', (build / 'agent_b/report.md').read_text(encoding='utf-8'))
+                self.assertIn('dashboards', (build / 'agent_b/report.md').read_text(encoding='utf-8'))
         self.assertEqual(prompts[0], prompts[1])
         self.assertEqual(prompts[1], prompts[2])
 
@@ -103,7 +104,7 @@ class WorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             build = Path(tmp)
             (build / 'job_description.txt').write_text('Data Analyst\nCompany: Example\nJob description\nAnalyse data.', encoding='utf-8')
-            originals = dict(zip(CL_FILES, ['Old Company', 'Dear Hiring Team,', 'Data Analyst', 'In {finance}.', 'Work in {analytics}.', 'Use [data].']))
+            originals = dict(zip(CL_FILES, ['Old Company', 'Dear Hiring Team,', 'Data Analyst', 'In {finance}.', 'Use [data].']))
             for path, value in originals.items():
                 target = build / path
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -179,26 +180,220 @@ class WorkflowTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 edit(value)
 
-    def test_skills_keep_every_tool_and_may_add_the_ads_tools(self):
+    def test_bullet_category_prefixes_rejected_in_both_languages(self):
+        cases = (
+            ('cv/src/experience.tex', 'Automatisierung der Extraktion und Bereinigung von Destatis-Datensätzen.',
+             ('Data Engineering: ', 'Data Engineering:', 'Datenanalyse: ', 'ETL/Datenpipelines: ')),
+            ('cv/src/projects.tex', 'Built automated Python data pipelines.',
+             ('Data Engineering: ', 'Machine Learning: ', 'Python: ')),
+        )
+        for path, body, prefixes in cases:
+            before = {path: r'Heading\resumeItem{' + body + '}End'}
+            validate_edits(before, before)
+            for prefix in prefixes:
+                with self.subTest(path=path, prefix=prefix), self.assertRaisesRegex(ValueError, 'category label'):
+                    validate_edits(before, {path: r'Heading\resumeItem{' + prefix + body + '}End'})
+        # A colon inside a later sentence is not a leading category label.
+        before = {'cv/src/projects.tex': r'Heading\resumeItem{Built models. Compared two methods: LSTM and XGBoost.}End'}
+        validate_edits(before, before)
+
+    def test_languages_remain_read_only_when_included_in_skills(self):
+        for folder, label in (('cv', 'Languages'), ('cv_de', 'Sprachen')):
+            with self.subTest(language=folder):
+                skills = (ROOT / f'input/{folder}/src/skills.tex').read_text(encoding='utf-8')
+                languages = (ROOT / f'input/{folder}/src/languages.tex').read_text(encoding='utf-8')
+                original = {'cv/src/skills.tex': skills}
+                reply = {'summary': '', 'bullets': [], 'order': [], 'skills': [
+                    {'label': 'Tools', 'items': list(reversed(compact_cv(original)['skills'][1]['items']))},
+                ]}
+                edited = apply_edits(original, reply)
+                validate_edits(original, edited)
+                self.assertIn(r'\input{src/languages}', edited['cv/src/skills.tex'])
+                self.assertIn(label, compact_cv({'cv/src/languages.tex': languages})['languages'])
+                # The read-only input cannot be replaced or exposed as an editable skills line.
+                with self.assertRaisesRegex(ValueError, 'Skills: only'):
+                    validate_edits(original, {'cv/src/skills.tex': skills.replace(r'\input{src/languages}', 'German (C2)')})
+                reply['skills'] = [{'label': label, 'items': ['German (C2)']}]
+                with self.assertRaisesRegex(ValueError, 'unknown labels'):
+                    apply_edits(original, reply)
+
+    def test_skills_reorder_but_keep_the_same_tools(self):
         skills=lambda tools,concepts: (r'\textbf{Programming}{: '+tools+'} \\'+'\n'+r'\textbf{Concepts}{: '+concepts+'}')
         core='Data Analysis, Statistics, Machine Learning, Deep Learning, Data Visualization, Data Modeling, ETL/Data Pipelines'
         before={'cv/src/skills.tex':skills('Python (pandas, NumPy), R, SQL, Stata',core+', Cloud Computing')}
-        ad='We use SQL, Snowflake, Looker, dbt, Airflow and Spark.'
-        edit=lambda tools,concepts,banned=(): validate_edits(before,{'cv/src/skills.tex':skills(tools,concepts)},banned=banned,ad_text=ad)
-        # A tool the ad names may join the line, even one the analysis found no CV evidence for.
-        edit('SQL, Snowflake, Python (pandas, NumPy), R, Stata',core,banned=['Snowflake'])
+        edit=lambda tools,concepts,banned=(): validate_edits(before,{'cv/src/skills.tex':skills(tools,concepts)},banned=banned)
         edit('SQL, Python (pandas, NumPy), R, Stata','Statistics, Data Analysis, '+core.split(', ',2)[2]+', Reporting')
+        # Concepts are optional; a keyword used elsewhere does not have to stay here.
+        edit('Python (pandas, NumPy), R, SQL, Stata',core.replace('Statistics, ',''))
         for tools,concepts in (('SQL, Python (pandas, NumPy), R','x'),                     # a tool removed
-                               ('SQL, Python (pandas, NumPy), R, Stata, SPSS',core),       # a tool the ad does not name
-                               ('SQL, Python (pandas, NumPy), R, Stata, Snowflake, Looker, dbt, Airflow, Spark',core),  # more than four added
+                               ('SQL, Python (pandas, NumPy), R, Stata, SPSS',core),       # a tool added by the agent
                                ('SQL, Python (pandas), R, Stata',core),                    # an entry reworded
-                               ('Python (pandas, NumPy), R, SQL, Stata',core.replace('Statistics, ','')),  # a core concept dropped
                                ('Python (pandas, NumPy), R, SQL, Stata',core+', Reporting, Reporting')):
             with self.subTest(tools=tools,concepts=concepts), self.assertRaises(ValueError):
                 edit(tools,concepts)
         # The analysis found no evidence for A/B testing, so it cannot be added as a concept.
         with self.assertRaisesRegex(ValueError,'no evidence'):
             edit('Python (pandas, NumPy), R, SQL, Stata',core+', A/B Testing',banned=['A/B testing'])
+
+    def test_concepts_use_final_cv_text_and_preserve_other_skills(self):
+        for label, summary, concepts, remaining in (
+            ('Concepts', 'Focused on machine learning and DEEP-LEARNING.',
+             'Machine Learning, Deep Learning, SQL, ETL/Data Pipelines, Model Evaluation, Cloud Computing', 'Cloud Computing, LSTM, XGBoost'),
+            ('Kompetenzen', 'M.Sc. in Economics mit Fokus auf Machine Learning, Deep Learning und Statistik.',
+             'Machine Learning, Deep Learning, Statistik, SQL, ETL/Datenpipelines, Model Evaluation, Cloud Computing', 'Cloud Computing, LSTM, XGBoost'),
+        ):
+            with self.subTest(label=label):
+                files = {'cv/src/summary_text.tex': summary,
+                         'cv/src/experience.tex': r'\resumeItem{Used model evaluation, automated data pipelines and Datenpipelines in research.}',
+                         'cv/src/skills.tex': (r'\textbf{Programming}{: Python, SQL} \\' + '\n'
+                                              + rf'\textbf{{{label}}}{{: {concepts}}} \\' + '\n'
+                                              + r'\input{src/languages}')}
+                final = deduplicate_concepts(files)
+                self.assertIn(rf'\textbf{{{label}}}{{: {remaining}}}', final['cv/src/skills.tex'])
+                self.assertIn(r'\textbf{Programming}{: Python, SQL}', final['cv/src/skills.tex'])
+                self.assertIn(r'\input{src/languages}', final['cv/src/skills.tex'])
+                self.assertEqual(final['cv/src/summary_text.tex'], summary)
+                validate_edits(files, final)
+                self.assertEqual(deduplicate_concepts(final), final)
+                # Partial words do not remove a distinct concept.
+                files['cv/src/summary_text.tex'] = 'Used deep features in learning systems.'
+                self.assertIn('Deep Learning', deduplicate_concepts(files)['cv/src/skills.tex'])
+
+    def test_repeated_optional_concepts_leave_only_mandatory_models_and_are_reported(self):
+        skills = (r'\textbf{Tools}{: Excel} \\' + '\n'
+                  + r'\textbf{Concepts}{: Deep Learning, Statistics} \\' + '\n'
+                  + r'\input{src/languages}')
+        files = {'cv/src/summary_text.tex': 'Deep Learning graduate.', 'cv/src/skills.tex': skills}
+        final = deduplicate_concepts(files, ['Statistics coursework'])
+        self.assertIn(r'\textbf{Concepts}{: LSTM, XGBoost}', final['cv/src/skills.tex'])
+        self.assertNotIn('\n\n', final['cv/src/skills.tex'])
+        self.assertIn(r'\input{src/languages}', final['cv/src/skills.tex'])
+        validate_edits(files, final)
+        self.assertIn('**Skills, Concepts**', before_after(files, final))
+        self.assertIn('- Before: Deep Learning, Statistics', before_after(files, final))
+        self.assertIn('After:  LSTM, XGBoost', before_after(files, final))
+
+    def test_mandatory_models_survive_repetition_omission_and_empty_rows_in_both_languages(self):
+        for label, programming in (('Concepts', 'Programming'), ('Kompetenzen', 'Programmierung')):
+            for row in ('LSTM, xgboost, lstm, XGBoost, Deep Learning', 'Deep Learning', ''):
+                with self.subTest(label=label, row=row):
+                    files = {'cv/src/summary_text.tex': 'Used LSTM, XGBoost and Deep Learning.',
+                             'cv/src/skills.tex': (rf'\textbf{{{programming}}}{{: Python}} \\' + '\n'
+                                                  + rf'\textbf{{{label}}}{{: {row}}} \\' + '\n'
+                                                  + r'\input{src/languages}')}
+                    final = deduplicate_concepts(files)
+                    self.assertIn(rf'\textbf{{{label}}}{{: LSTM, XGBoost}}', final['cv/src/skills.tex'])
+                    self.assertEqual(deduplicate_concepts(final), final)
+                    validate_edits(files, final)
+            # A previously omitted row is restored above Languages in the correct language.
+            files['cv/src/skills.tex'] = rf'\textbf{{{programming}}}{{: Python}} \\' + '\n' + r'\input{src/languages}'
+            final = deduplicate_concepts(files)
+            self.assertIn(rf'\textbf{{{label}}}{{: LSTM, XGBoost}}', final['cv/src/skills.tex'])
+            validate_edits(files, final)
+
+    def test_tailoring_and_shortening_automatically_remove_repeated_concepts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build = Path(tmp)
+            (build / 'job_description.txt').write_text('Deep Learning, Model Evaluation and Cloud Computing', encoding='utf-8')
+            files = dict(self.CV, **{'cv/src/summary_text.tex': 'Economics graduate with experience in Deep Learning.',
+                                   'cv/src/skills.tex': r'\textbf{Programming}{: Python, SQL} \\ '
+                                                        r'\textbf{Concepts}{: Deep Learning, Model Evaluation, Cloud Computing} \\ '
+                                                        r'\input{src/languages}'})
+            files['cv/src/projects.tex'] = r'\resumeItem{Built models.}\resumeItemListEnd'
+            files.update({'cv/src/education.tex': 'Model Evaluation coursework.',
+                          'cv/src/certificates.tex': 'SQL certificate.', 'cv/src/languages.tex': 'German (B2)',
+                          'cv/src/job_title.tex': 'Cloud Computing Analyst'})
+            for path, text in files.items():
+                target = build / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding='utf-8')
+            analysis = valid_analysis()
+            analysis['keywords'] = [{'term': term, 'use_in': 'concepts'}
+                                    for term in ('Deep Learning', 'Model Evaluation', 'Cloud Computing')]
+            (build / 'agent_j').mkdir()
+            (build / 'agent_j/analysis.json').write_text(json.dumps(analysis), encoding='utf-8')
+            adapter = SimpleNamespace(invoke=Mock(return_value=json.dumps(self.NO_CHANGE)))
+            for stage in ('agent_b', 'agent_b_retry'):
+                execute_agent(adapter, Settings('claude', 'unused', None, None, 10), build, Path('ad.pdf'),
+                              stage, ROOT / 'agents/agent_b_optimizer.md', [])
+                self.assertIn(r'\textbf{Concepts}{: LSTM, XGBoost}', (build / 'cv/src/skills.tex').read_text(encoding='utf-8'))
+                self.assertEqual((build / 'cv/src/languages.tex').read_text(encoding='utf-8'), 'German (B2)')
+            # Keywords remain visible elsewhere, so neither pass needs a repair.
+            self.assertEqual(adapter.invoke.call_count, 2)
+            # Shortening can restore an optional concept while Python keeps both mandatory models.
+            adapter.invoke.return_value = json.dumps(dict(self.NO_CHANGE,
+                summary='Economics graduate with practical experience.',
+                skills=[{'label': 'Concepts', 'items': ['Deep Learning']}]))
+            execute_agent(adapter, Settings('claude', 'unused', None, None, 10), build, Path('ad.pdf'),
+                          'agent_b_shorter', ROOT / 'agents/agent_b_optimizer.md', [])
+            self.assertIn(r'\textbf{Concepts}{: Deep Learning, LSTM, XGBoost}', (build / 'cv/src/skills.tex').read_text(encoding='utf-8'))
+            self.assertEqual(adapter.invoke.call_count, 3)
+
+    def test_python_adds_the_ads_tools_to_their_line(self):
+        skills=(r'\textbf{Programming}{: Python (pandas, NumPy), R, SQL} \\ \textbf{Tools}{: Git, Excel} \\ '
+                r'\textbf{Concepts}{: Statistics, Reporting}')
+        tools=[{'name':'TypeScript','line':'programming'},{'name':'Looker','line':'tools'},{'name':'SQL','line':'programming'},
+               {'name':'Snowflake','line':'tools'},{'name':'dbt','line':'tools'},{'name':'Airflow','line':'tools'},
+               {'name':'Spark','line':'tools'},{'name':'Kafka','line':'tools'},{'name':'SPSS','line':'programming'}]
+        ad='TypeScript, SQL, Looker, Snowflake, dbt, Airflow, Spark and Kafka. Research skills.'
+        text,added=add_tools(skills,tools,ad)
+        # Ad-only languages never join Programming; only the first four software tools fit.
+        self.assertEqual(added,['Looker','Snowflake','dbt','Airflow'])
+        self.assertIn(r'\textbf{Programming}{: Python (pandas, NumPy), R, SQL}',text)
+        self.assertNotIn('TypeScript',text)
+        self.assertIn(r'\textbf{Tools}{: Git, Excel, Looker, Snowflake, dbt, Airflow}',text)
+        self.assertIn(r'\textbf{Concepts}{: Statistics, Reporting}',text)
+        self.assertEqual(add_tools(skills,[],ad),(skills,[]))
+        # Once on the tool lines, such a tool passes the evidence check there but still not as a concept.
+        validate_edits({'cv/src/skills.tex':text},{'cv/src/skills.tex':text},banned=['Snowflake'])
+        with self.assertRaisesRegex(ValueError,'no evidence'):
+            validate_edits({'cv/src/skills.tex':text},{'cv/src/skills.tex':text.replace('Statistics, Reporting','Statistics, Reporting, Snowflake')},banned=['Snowflake'])
+
+    def test_ad_languages_cannot_be_added_in_either_template_or_under_tools(self):
+        for label in ('Programming', 'Programmierung'):
+            # Tools appears first: insertion must follow its label, not its position.
+            skills = (rf'\textbf{{Tools}}{{: Git}} \\ \textbf{{{label}}}{{: Python, SQL}} \\ '
+                      r'\textbf{Concepts}{: Statistics}')
+            for name in ('C++', 'c++17', 'C + +', 'C＋＋', 'C plus plus', 'Cplusplus', 'cpp'):
+                for line in ('programming', 'tools'):
+                    with self.subTest(label=label, name=name, line=line):
+                        text, added = add_tools(skills, [{'name': name, 'line': line}], f'Required: {name}')
+                        self.assertEqual((text, added), (skills, []))
+            text, added = add_tools(skills, [{'name': 'Java', 'line': 'programming'},
+                                           {'name': 'Looker', 'line': 'tools'}], 'Java and Looker')
+            self.assertEqual(added, ['Looker'])
+            self.assertIn(rf'\textbf{{{label}}}{{: Python, SQL}}', text)
+            self.assertIn(r'\textbf{Tools}{: Git, Looker}', text)
+
+    def test_cpp_claims_are_blocked_without_an_analyst_ban(self):
+        before = {'cv/src/summary_text.tex': 'Analyst with Python and SQL.',
+                  'cv/src/skills.tex': (r'\textbf{Programming}{: Python, SQL} \\ '
+                                        r'\textbf{Tools}{: Git} \\ \textbf{Concepts}{: Statistics}'),
+                  'cv/src/experience.tex': r'\resumeItem{Built models.}\resumeItemListEnd'}
+        for name in ('C++', 'C++20', 'C + +', 'C plus plus', 'cpp'):
+            cases = [('cv/src/summary_text.tex', f'Analyst with Python and {name}.'),
+                     ('cv/src/skills.tex', before['cv/src/skills.tex'].replace('Statistics', name)),
+                     ('cv/src/skills.tex', before['cv/src/skills.tex'].replace('Git', f'Git, {name}')),
+                     ('cv/src/experience.tex', rf'\resumeItem{{Built {name} models.}}\resumeItemListEnd')]
+            for path, text in cases:
+                with self.subTest(name=name, path=path), self.assertRaisesRegex(ValueError, r'C\+\+'):
+                    validate_edits(before, {**before, path: text})
+
+    def test_programming_entries_are_fixed_and_other_language_claims_need_evidence(self):
+        for label in ('Programming', 'Programmierung'):
+            before = {'cv/src/skills.tex': rf'\textbf{{{label}}}{{: Python, R, SQL}}',
+                      'cv/src/summary_text.tex': 'Analyst who works with Python.'}
+            validate_programming_skills(before, {**before, 'cv/src/skills.tex':
+                                                rf'\textbf{{{label}}}{{: SQL, Python, R}}'})
+            for items in ('Python, R, SQL, Java', 'Python, SQL', 'Python (advanced), R, SQL'):
+                with self.subTest(label=label, items=items), self.assertRaisesRegex(ValueError, 'verified template'):
+                    validate_programming_skills(before, {**before, 'cv/src/skills.tex':
+                                                         rf'\textbf{{{label}}}{{: {items}}}'})
+            analysis = valid_analysis()
+            analysis['requirements'].append({'requirement': 'Java', 'type': 'Programming Language'})
+            with self.assertRaisesRegex(ValueError, 'no evidence.*Java'):
+                validate_programming_skills(before, {**before, 'cv/src/summary_text.tex':
+                                                     'Analyst who works with Java.'}, analysis)
 
     def test_unsupported_terms_are_blocked(self):
         before={'cv/src/summary_text.tex':'Economics graduate who works with Python and SQL.'}
@@ -214,6 +409,28 @@ class WorkflowTests(unittest.TestCase):
                                  r'\resumeItem{Prepared reports.}\resumeItemListEnd'),
         'cv/src/skills.tex':r'\textbf{Programming}{: Python (pandas, NumPy), R, SQL} \\ \textbf{Concepts}{: Statistics, Reporting}'}
     NO_CHANGE={'status':'complete','summary':'','bullets':[],'order':[],'skills':[],'omitted':[],'note':''}
+
+    def test_cpp_repair_failure_keeps_cv_files_unchanged_during_tailoring_and_shortening(self):
+        for stage in ('agent_b', 'agent_b_retry'):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as tmp:
+                build = Path(tmp)
+                (build / 'job_description.txt').write_text('Analyst using C++.', encoding='utf-8')
+                files = {**self.CV, 'cv/src/projects.tex': r'\resumeItem{Built models.}\resumeItemListEnd',
+                         'cv/src/education.tex': 'MSc', 'cv/src/certificates.tex': 'SQL certificate',
+                         'cv/src/languages.tex': 'German: C1'}
+                for path, text in files.items():
+                    target = build / path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(text, encoding='utf-8')
+                # No analyst ban is needed: C++ is always rejected before saving.
+                reply = json.dumps(dict(self.NO_CHANGE, summary='Graduate with C++.'))
+                adapter = SimpleNamespace(invoke=Mock(return_value=reply))
+                with self.assertRaisesRegex(ValueError, 'Invalid agent output after one repair'):
+                    execute_agent(adapter, Settings('claude', 'unused', None, None, 10), build,
+                                  Path('ad.pdf'), stage, ROOT / 'agents/agent_b_optimizer.md', [])
+                self.assertEqual(adapter.invoke.call_count, 2)
+                for path, text in files.items():
+                    self.assertEqual((build / path).read_text(encoding='utf-8'), text)
 
     def test_agents_get_the_cv_as_plain_data_with_bullet_ids(self):
         cv=compact_cv(self.CV)
@@ -270,6 +487,26 @@ class WorkflowTests(unittest.TestCase):
         for value in ('Economics graduate.\n\nWorks with Python.',summary*2,'Economics graduate with 5 years of experience.'):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 edit(value)
+
+    def test_placed_ad_terms_must_be_used_or_declined(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build=Path(tmp)
+            (build/'job_description.txt').write_text('Data analyst',encoding='utf-8')
+            for path,value in {**self.CV,'cv/src/projects.tex':r'Project\resumeItem{Built 2 models.}End','cv/src/education.tex':'MSc',
+                               'cv/src/certificates.tex':'SQL certificate','cv/src/languages.tex':'German: C1'}.items():
+                (build/path).parent.mkdir(parents=True,exist_ok=True)
+                (build/path).write_text(value,encoding='utf-8')
+            analysis=valid_analysis()
+            analysis['keywords']=[{'term':'stakeholder','use_in':'E2.1'},{'term':'data quality','use_in':'E1.1'},{'term':'Snowflake','use_in':'none'}]
+            (build/'agent_j').mkdir()
+            (build/'agent_j/analysis.json').write_text(json.dumps(analysis),encoding='utf-8')
+            reply=lambda **changes: json.dumps(dict(self.NO_CHANGE,note='ok',**changes))
+            # First reply ignores both terms; the repair uses one and declines the other.
+            adapter=SimpleNamespace(invoke=Mock(side_effect=[reply(), reply(bullets=[{'id':'E2.1','text':'Prepared reports for stakeholders.'}],omitted=['Data Quality'])]))
+            execute_agent(adapter,Settings('claude','unused',None,None,10),build,Path('ad.pdf'),'agent_b',ROOT/'agents/agent_b_optimizer.md',[])
+            self.assertEqual(adapter.invoke.call_count,2)
+            self.assertIn("Use these ad terms where the analysis placed them, or list them in omitted: ['stakeholder', 'data quality']",adapter.invoke.call_args.args[1])
+            self.assertIn('reports for stakeholders',(build/'cv/src/experience.tex').read_text(encoding='utf-8'))
 
     def test_invalid_edits_are_never_written(self):
         with tempfile.TemporaryDirectory() as tmp:

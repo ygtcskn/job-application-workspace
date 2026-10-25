@@ -70,6 +70,16 @@ such as the contact headings and CV layout come from `input/`. Edit a shared fil
 once, and edit wording in both languages. Every agent is told the language;
 agent reports and the hiring review stay in English.
 
+Languages appear on one read-only line below Concepts/Kompetenzen in Skills.
+Language names and proficiency levels are preserved during tailoring. Experience
+and project bullets state the work directly; category prefixes such as
+`Data Engineering:` are rejected before saving, including on the shortening retry.
+
+Concepts/Kompetenzen always includes LSTM and XGBoost, even when they are named
+elsewhere in the CV. Other concepts only appear if their terms are not already
+mentioned elsewhere. Python removes repeated optional terms and restores both
+mandatory models after Agent B's edits and any shortening retry.
+
 Jobs finished before language support have English documents. Name German jobs
 explicitly to redo them in German.
 
@@ -107,9 +117,17 @@ AI calls are kept for judgment; everything mechanical is Python, so no tokens ar
 - No agent describes its edits. Python compares the files before and after and writes that
   comparison, the new words, the strengths and gaps, the match scores and the keyword counts.
 - The CV's job title is copied from the cover letter's role.
-- Agent B may add up to four tools the ad names to the Programming line and to the Tools
-  line; your own entries always stay. Python checks that each added tool is in the ad.
-  Everywhere else in the CV, terms without CV evidence are still rejected.
+- The ad's wording reaches the CV through Agent J: it lists the ad's key terms and the bullet,
+  the summary or the Concepts line where the CV can truthfully carry each. Agent B must use
+  every placed term or name it as overstating; Python rejects a reply that does neither, and
+  the report counts how many placed terms are on the CV before and after.
+- Programming/Programmierung keeps only the verified template entries; Agent B may reorder
+  them but cannot add, remove or rewrite them. Languages named only in the ad remain gaps.
+  C++ is explicitly blocked in candidate CV claims, including Tools, Concepts, summary and
+  bullets. Python checks this before saving edits and before compiling, including retries.
+- Agent J may list other software tools the ad names that the CV lacks. Python appends up
+  to four to the Tools line after checking the ad; programming languages cannot use this
+  route. Everywhere else in the CV, terms without CV evidence are still rejected.
 - Providers that enforce the reply schema themselves (Claude, Codex) do not get the schema
   repeated in the prompt.
 

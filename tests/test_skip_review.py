@@ -7,19 +7,20 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src import run_job
-from src.agent_workflow import CV_FILES, CV_READ_ONLY
+from src.agent_workflow import CL_FILES, CV_FILES, CV_READ_ONLY
 from src.providers.base import Settings
 from test_pipeline_validation import valid_analysis, valid_review
 
 
 class ReviewModeTests(unittest.TestCase):
-    def run_fixture(self, root, review=True, failure=False, ad_text='Job description\nWe are hiring an analyst for our team.'):
+    def run_fixture(self, root, review=True, failure=False, ad_text='Job description\nWe are hiring an analyst for our team.',
+                    cv_edit=None, shorten=False):
         template = root / 'input/cl/src'
         template.mkdir(parents=True, exist_ok=True)
         for folder in ('cl_de', 'cv_de'):
             (root / 'input' / folder).mkdir(exist_ok=True)
-        for field in ('company', 'towhom', 'position', 'part1', 'part2', 'part3'):
-            (template / f'{field}.tex').write_text('Template', encoding='utf-8')
+        for path in CL_FILES:
+            (root / 'input' / path).write_text('Template', encoding='utf-8')
         (root / 'input/cv/src').mkdir(parents=True, exist_ok=True)
         for path in CV_FILES + CV_READ_ONLY:
             (root / 'input' / path).write_text('Wrote SQL queries.', encoding='utf-8')
@@ -28,6 +29,7 @@ class ReviewModeTests(unittest.TestCase):
         (ads / 'job_description_1.pdf').write_bytes(b'fixture ad')
         agents = []
         self.notes, self.salutation = {}, None
+        self.compiled = []
 
         def agent(settings, build, ad, name, instructions, notes, *args):
             agents.append(name)
@@ -38,6 +40,9 @@ class ReviewModeTests(unittest.TestCase):
                 self.salutation = (build / 'cl/src/towhom.tex').read_text(encoding='utf-8')
                 self.assertFalse((build / 'cl_de').exists() or (build / 'cv_de').exists())
                 (build / 'cl/src/company.tex').write_text('Example', encoding='utf-8')
+            if cv_edit and name == ('agent_b_retry' if shorten else 'agent_b'):
+                path, text = cv_edit
+                (build / path).write_text(text, encoding='utf-8')
             if name == 'agent_c':
                 if failure:
                     raise ValueError('Invalid review')
@@ -48,6 +53,7 @@ class ReviewModeTests(unittest.TestCase):
             return 'Complete'
 
         def compile_pdf(folder, tex):
+            self.compiled.append((folder.name, tex))
             folder.mkdir(exist_ok=True)
             pdf = folder / Path(tex).with_suffix('.pdf')
             pdf.write_bytes(b'fixture compiled pdf')
@@ -59,7 +65,8 @@ class ReviewModeTests(unittest.TestCase):
             stack.enter_context(patch.object(run_job, 'pdf_text', return_value=ad_text))
             stack.enter_context(patch.object(run_job, 'run_agent', side_effect=agent))
             stack.enter_context(patch.object(run_job, 'validate_identity'))
-            stack.enter_context(patch.object(run_job, 'page_count', return_value=1))
+            stack.enter_context(patch.object(run_job, 'page_count', side_effect=[3, 2, 1] if shorten else None,
+                                             return_value=1))
             stack.enter_context(patch.object(run_job, 'build_pdf', side_effect=compile_pdf))
             result = run_job.run_job(1, Settings('claude', 'unused', None, None, 10), review=review)
             self.completion = json.loads((run_job.output_dir(1) / 'completion.json').read_text(encoding='utf-8'))
@@ -72,6 +79,18 @@ class ReviewModeTests(unittest.TestCase):
             (output / 'yigit_coskun_cv.pdf').write_bytes(b'changed after completion')
             self.assertFalse(run_job.is_finished(1, require_review=False))
         return agents, result
+
+    def test_language_violations_never_compile_or_publish_even_on_shortening(self):
+        for shorten in (False, True):
+            for edit in (('cv/src/summary_text.tex', 'Analyst with C++.'),
+                         ('cv/src/skills.tex', r'\textbf{Programming}{: SQL, Java}')):
+                with self.subTest(shorten=shorten, path=edit[0]), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    with self.assertRaises(ValueError):
+                        self.run_fixture(root, review=False, cv_edit=edit, shorten=shorten)
+                    self.assertEqual(self.compiled, [('cv', 'resume.tex')] if shorten else [])
+                    self.assertFalse((root / 'output/job_1').exists())
+                    self.assertFalse((root / 'temp/build/job_1/completion.json').exists())
 
     def test_review_runs_all_three_and_writes_review(self):
         with tempfile.TemporaryDirectory() as tmp:

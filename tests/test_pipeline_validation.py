@@ -11,7 +11,7 @@ from src.providers.base import ProviderFailure, Settings
 from src.process import ProcessFailure
 from src.validation import company_matches, validate_identity, validate_review, prepare_cover_fields, escape_latex_text
 from src.agent_workflow import editor_schema, parse_reply, request_structured
-from src.analysis import contains, match_scores, plain, report as tailoring_report, validate_analysis
+from src.analysis import contains, match_scores, mentions, plain, report as tailoring_report, validate_analysis
 
 
 def valid_review():
@@ -38,7 +38,9 @@ def valid_analysis():
                  'evidence': 'Ziraat Bank: SQL queries', 'actual_match': 'STRONG', 'cv_match': 'MODERATE'},
                 {'requirement': 'Snowflake', 'importance': 'Preferred', 'type': 'Tool',
                  'evidence': 'None', 'actual_match': 'MISSING', 'cv_match': 'MISSING'}],
-            'keywords': ['SQL', 'Snowflake'],
+            'keywords': [{'term': 'SQL', 'use_in': 'E2.2'}, {'term': 'data quality', 'use_in': 'concepts'},
+                         {'term': 'Snowflake', 'use_in': 'none'}],
+            'tools': [{'name': 'Snowflake', 'line': 'tools'}],
             'must_not_add': ['Snowflake'],
             'edit_plan': {'reorder': ['Move the SQL bullet first'], 'rewrite': [], 'emphasize': ['SQL'], 'remove': []}}
 
@@ -47,7 +49,7 @@ class AnalysisTests(unittest.TestCase):
     def test_schema_accepts_the_sample_and_scores_follow_the_guideline(self):
         schema = json.loads((run_job.AGENTS_DIR / 'agent_j_schema.json').read_text(encoding='utf-8'))
         analysis = parse_reply(json.dumps(valid_analysis()), schema)
-        validate_analysis(analysis, 'Wrote SQL queries.')
+        validate_analysis(analysis, 'Wrote SQL queries.', ['E2.2'])
         # Must-have weighs 3 and Preferred 1; STRONG scores 1, MODERATE 0.7, MISSING 0.
         actual, shown = match_scores(analysis['requirements'])
         self.assertAlmostEqual(actual, 0.75)
@@ -55,18 +57,63 @@ class AnalysisTests(unittest.TestCase):
 
     def test_inconsistent_analysis_is_sent_back(self):
         with self.assertRaisesRegex(ValueError, 'already contains'):
-            validate_analysis(valid_analysis(), 'Loaded data into Snowflake.')
+            validate_analysis(valid_analysis(), 'Loaded data into Snowflake.', ['E2.2'])
         overstated = valid_analysis()
         overstated['requirements'][1]['cv_match'] = 'WEAK'
         with self.assertRaisesRegex(ValueError, 'cv_match'):
-            validate_analysis(overstated, 'Wrote SQL queries.')
+            validate_analysis(overstated, 'Wrote SQL queries.', ['E2.2'])
         with self.assertRaisesRegex(ValueError, 'requirements is empty'):
-            validate_analysis(dict(valid_analysis(), requirements=[]), 'Wrote SQL queries.')
+            validate_analysis(dict(valid_analysis(), requirements=[]), 'Wrote SQL queries.', ['E2.2'])
+        # An ad term must be placed on a real bullet, and a placed term cannot be one the CV has no evidence for.
+        with self.assertRaisesRegex(ValueError, 'use_in'):
+            validate_analysis(valid_analysis(), 'Wrote SQL queries.', ['E1.1'])
+        placed = valid_analysis()
+        placed['keywords'][2]['use_in'] = 'summary'
+        with self.assertRaisesRegex(ValueError, 'must_not_add'):
+            validate_analysis(placed, 'Wrote SQL queries.', ['E2.2'])
 
     def test_whole_term_matching(self):
         self.assertTrue(contains('Analysis in R and Stata', 'R'))
         self.assertFalse(contains('Research at the IAB', 'R'))
         self.assertTrue(contains(plain(r'Data \& Analytics with A/B testing'), 'a/b Testing'))
+        # Checking that an ad term reached the CV tolerates endings and hyphens, but not other words.
+        for text, term in (('reports for stakeholders', 'stakeholder'), ('mit relationalen Datenbanksystemen', 'relationale Datenbanksystem'),
+                           ('data-quality checks', 'data quality'), ('Wrote SQL queries', 'SQL')):
+            self.assertTrue(mentions(text, term), term)
+        for text, term in (('NoSQL stores', 'SQL'), ('data and its quality', 'data quality'), ('Research', 'R')):
+            self.assertFalse(mentions(text, term), term)
+
+    def test_ad_only_languages_are_gaps_even_if_the_analyst_omits_the_ban(self):
+        analysis = valid_analysis()
+        language = {'requirement': 'Java', 'importance': 'Important', 'type': 'Programming Language',
+                    'evidence': 'None', 'actual_match': 'MISSING', 'cv_match': 'MISSING'}
+        analysis['requirements'].append(language)
+        analysis['keywords'].append({'term': 'Java', 'use_in': 'none'})
+        validate_analysis(analysis, 'Wrote SQL queries.', ['E2.2'])
+        language['actual_match'] = 'MODERATE'
+        with self.assertRaisesRegex(ValueError, 'without CV evidence must be MISSING'):
+            validate_analysis(analysis, 'Wrote SQL queries.', ['E2.2'])
+        language['actual_match'] = 'MISSING'
+        analysis['keywords'][-1]['use_in'] = 'concepts'
+        with self.assertRaisesRegex(ValueError, 'programming keywords'):
+            validate_analysis(analysis, 'Wrote SQL queries.', ['E2.2'])
+        analysis['keywords'][-1]['use_in'] = 'none'
+        analysis['tools'].append({'name': 'Java', 'line': 'tools'})
+        with self.assertRaisesRegex(ValueError, 'never programming languages'):
+            validate_analysis(analysis, 'Wrote SQL queries.', ['E2.2'])
+
+    def test_cpp_and_programming_tools_cannot_enter_the_analyst_additions(self):
+        for name, line in (('C++', 'tools'), ('C++17', 'tools'), ('Java', 'programming')):
+            with self.subTest(name=name, line=line):
+                analysis = valid_analysis()
+                analysis['tools'].append({'name': name, 'line': line})
+                with self.assertRaises(ValueError):
+                    validate_analysis(analysis, 'Wrote SQL queries.', ['E2.2'])
+        schema = json.loads((run_job.AGENTS_DIR / 'agent_j_schema.json').read_text(encoding='utf-8'))
+        analysis = valid_analysis()
+        analysis['tools'].append({'name': 'Java', 'line': 'programming'})
+        with self.assertRaises(ValueError):
+            parse_reply(json.dumps(analysis), schema)
 
     def test_report_has_the_five_parts_and_counts_keywords(self):
         text = tailoring_report(valid_analysis(), job_title='Data Analyst', comparison='- Before: Queried data.\n  After:  Wrote SQL queries.',
@@ -75,8 +122,12 @@ class AnalysisTests(unittest.TestCase):
         for heading in ('## A. Application rules in the ad', '## B. Match analysis', '## C. Edit plan', '## D. Before and after', '## E. Final verification'):
             self.assertIn(heading, text)
         self.assertIn('Actual job match: 75%', text)
-        self.assertIn('0 of 1 before, 1 of 1 after', text)
-        self.assertIn('Unsupported keywords in the tailored CV: none', text)
+        self.assertIn("The ad's wording: 1 of the 2 terms the CV can carry are now on it (0 before).", text)
+        self.assertIn('Terms Agent B left out as overstating: data quality.', text)
+        self.assertIn('Terms without CV evidence on the tailored CV: none', text)
+        self.assertIn('- SQL → E2.2', text)
+        self.assertIn('- Snowflake → not supported by the CV', text)
+        self.assertIn('- Snowflake (tools)', text)
         # Strengths and gaps come from the requirement table, not from extra agent output.
         self.assertIn('### Major strengths\n- SQL: Ziraat Bank: SQL queries', text)
         self.assertIn('in neither the old CV nor the ad (check these): wrote', text)
