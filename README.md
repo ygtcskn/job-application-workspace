@@ -52,8 +52,8 @@ All three get the same instructions and checks, so the provider is interchangeab
 ## 4. How to run
 
 **Setup:**
-- Install **Python 3.12**, **MiKTeX** (for `pdflatex`) and **Node.js**.
-- Install one AI CLI and sign in, for example: `npm install -g @anthropic-ai/claude-code`, then run `claude`.
+- Install **Python 3.12** and **MiKTeX** (for `pdflatex`).
+- Install one AI CLI and sign in. For example, Claude Code: run `irm https://claude.ai/install.ps1 | iex` in PowerShell, then run `claude`.
 - Set up the project:
 
 ```powershell
